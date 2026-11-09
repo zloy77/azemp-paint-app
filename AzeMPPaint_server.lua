@@ -11,7 +11,7 @@ ac.log('AzeMP Paint: server-side yuklenir v5.0')
 local CAR_LOCAL = 0
 local TEX_SLOT = 'txDiffuse'
 local LOGO = './logo.png' -- Optional; falls back to the text logo if unavailable.
-local TOGGLE_KEY = ui.KeyIndex.M
+local TOGGLE_KEY = ui.KeyIndex.N
 local CFG = {
   paintMatch = { 'carpaint', 'car_paint' },
   applyInterval = 0.12,
