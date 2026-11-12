@@ -13,7 +13,27 @@ local TEX_SLOT = 'txDiffuse'
 local LOGO = './logo.png' -- Optional; falls back to the text logo if unavailable.
 local TOGGLE_KEY = ui.KeyIndex.N
 local CFG = {
-  paintMatch = { 'carpaint', 'car_paint' },
+  paintMatch = {
+    'Car_Paint',
+    'CarPaint',
+    'car_paint',
+    'body',
+    'paint',
+    'CARPAINT',
+    'Rs_carpaint',
+    'ext_carpaint',
+    'nivapaint',
+    'EXT_BODY',
+    'BodyCML4K',
+    'carpaint7',
+    'EXT_CARPAINT',
+    'EXT_BODYAO',
+    'FrontPaint',
+    'Carpaint',
+    'vehicle_generic_smallspecmap__PAINT_1_',
+    'EXT_body_paint',
+    'vehicle_generic_smallspecmap__PAINT_1_.001',
+  },
   applyInterval = 0.12,
   initDelay = 1.0,
   resendEvery = 5.0,
