@@ -1,4 +1,4 @@
-ac.log('AzeMP Paint: server-side yuklenir v5.0')
+ac.log('AzeMP Paint: server-side yuklenir v5.1')
 
 -- ============================================================
 -- AzeMP Paint SERVER-SIDE
@@ -16,7 +16,7 @@ local CFG = {
   paintMatch = { 'carpaint', 'car_paint' },
   applyInterval = 0.12,
   initDelay = 1.0,
-  resendEvery = 10.0,
+  resendEvery = 5.0,
   retryInterval = 2.0,
   fontFamily = 'SF Pro Display',
   fontFolder = './fonts',
@@ -125,6 +125,9 @@ local lastApply = -100
 local lastSend = -100
 local initialized = false
 local updateError = false
+local retryTimer = 0
+local carIds = {}
+local connected = {}
 
 local function scanCar(carIndex)
   local targets = {}
@@ -215,24 +218,17 @@ local function applyHandle(carIndex, name, st)
   local r, g, b = hsv2rgb(st.H, st.S, st.V)
 
   local okT, errT = pcall(function()
-    if st.strength >= 0.995 then
-      m:setMaterialTexture(TEX_SLOT, {
-        textureSize = h.size,
-        background = rgbm(r, g, b, 1),
-        callback = function() end
-      })
-    else
-      local size, orig = h.size, h.origTex
-      m:setMaterialTexture(TEX_SLOT, {
-        textureSize = size,
-        callback = function()
-          if orig and orig ~= '' then
-            pcall(function() display.image{ image = orig, pos = vec2(0, 0), size = size } end)
-          end
-          display.rect{ pos = vec2(0, 0), size = size, color = rgbm(r, g, b, st.strength) }
+    local size, orig = h.size, h.origTex
+    local strength = st.strength
+    m:setMaterialTexture(TEX_SLOT, {
+      textureSize = size,
+      callback = function()
+        if strength < 0.995 and orig and orig ~= '' then
+          pcall(function() display.image{ image = orig, pos = vec2(0, 0), size = size } end)
         end
-      })
-    end
+        display.rect{ pos = vec2(0, 0), size = size, color = rgbm(r, g, b, strength >= 0.995 and 1 or strength) }
+      end
+    })
   end)
 
   local props = computeProps(h.orig, st.metallic, st.gloss)
@@ -258,7 +254,7 @@ local function applyCar(carIndex, st)
     local ok, result = pcall(applyHandle, carIndex, name, st)
     if ok and result then count = count + 1 end
   end
-  appliedByCar[carIndex] = (#targets > 0) and encodeState(st) or nil
+  appliedByCar[carIndex] = (#targets > 0 and count == #targets) and encodeState(st) or nil
   if carIndex == CAR_LOCAL then
     statusLine = 'Tətbiq olundu · ' .. count .. ' material'
     statusOk = #targets > 0
@@ -301,12 +297,46 @@ local function resetAll()
   statusOk = true
 end
 
+local function forgetCar(carIndex)
+  pcall(resetCar, carIndex)
+  playerStates[carIndex] = nil
+  targetsByCar[carIndex] = nil
+  handlesByCar[carIndex] = nil
+  appliedByCar[carIndex] = nil
+end
+
+-- Oyuncu qosulub/cixib ve ya masin deyisibse kohne reng qalmasin.
+local function checkPresence()
+  local newJoin = false
+  local count = 0
+  pcall(function() count = ac.getSim().carsCount end)
+  for i = 1, count - 1 do
+    local isConn, id = false, nil
+    pcall(function()
+      local car = ac.getCar(i)
+      isConn = car ~= nil and car.isConnected == true
+      if isConn then id = ac.getCarID(i) end
+    end)
+    if isConn then
+      if not connected[i] then newJoin = true end
+      if carIds[i] and id and carIds[i] ~= id then forgetCar(i) end
+      carIds[i] = id
+    elseif connected[i] then
+      forgetCar(i)
+      carIds[i] = nil
+    end
+    connected[i] = isConn
+  end
+  return newJoin
+end
+
 local function updateBody(dt)
   clock = clock + dt
   if not initialized and clock > CFG.initDelay then
     initialized = true
     scanCar(CAR_LOCAL)
     if active then dirty = true end
+    broadcastMyState()
   end
 
   if dirty and clock - lastApply >= CFG.applyInterval then
@@ -324,10 +354,10 @@ local function updateBody(dt)
   end
 
   -- Uzaq avtomobillərin mesh/material-ları gec yuklenirse yeniden yoxla.
-  if not updateBody.retry then updateBody.retry = 0 end
-  updateBody.retry = updateBody.retry + dt
-  if updateBody.retry >= CFG.retryInterval then
-    updateBody.retry = 0
+  retryTimer = retryTimer + dt
+  if retryTimer >= CFG.retryInterval then
+    retryTimer = 0
+    if checkPresence() then broadcastMyState() end
     for carIndex, st in pairs(playerStates) do
       if carIndex ~= CAR_LOCAL and st.active then
         local encoded = encodeState(st)
@@ -615,9 +645,7 @@ local function windowMainPro(dt)
     local hp = cur()
     local lw = 104
     local lh = lw * 176 / 640
-    if not pcall(ui.drawImage, LOGO, hp, hp + vec2(lw, lh), W_(1)) then
-      text('azemp', 22, hp, W_(1), 'bold')
-    end
+    text('azemp', 22, hp, W_(1), 'bold')
     local hx = '#' .. toHex(r, g, b)
     local hz = measure(hx, 12, 'semi')
     local pw, ph = hz.x + 36, 28
